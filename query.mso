@@ -1,0 +1,1 @@
+storage.receive({name:"slavik", age: 20, male: True})
