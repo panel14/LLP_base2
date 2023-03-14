@@ -13,8 +13,12 @@ size_t vtype;
 size_t bytesCount = 0;
 size_t filtersCount = 0;
 
-char commandsStr[4][7] = {
+char commandsStr[4][8] = {
         "RECEIVE", "DELETE", "INSERT", "UPDATE"
+};
+
+char operationStr[6][20] = {
+        "none", "LOWER THAN", "LOWER EQUALS THAN", "GREATER THAN", "GREATER EQUALS THAN", "NOT EQUALS"
 };
 
 void printQuery();
@@ -55,24 +59,23 @@ STORAGE INSERT OP_BRACE parent_def COMMA vals_def CL_C_BRACE {setCommand(2);}
 STORAGE UPDATE OP_BRACE OP_C_BRACE filters CL_C_BRACE COMMA DOLLAR SET COLON vals_def CL_BRACE {setCommand(3);};
 
 parent_def : OP_C_BRACE PARENT COLON INT CL_C_BRACE {setCurOper(0);
-vtype = INT_TYPE;
-setCurVal("parent", $4, 0);
-switchFilter();};
+    vtype = INT_TYPE;
+    setCurVal("parent", $4, 0);
+    switchFilter();};
 
 vals_def : OP_C_BRACE set_vals CL_C_BRACE;
 
 filters : filter {switchFilter();} | filter COMMA filters {switchFilter();};
 
 filter : STRING COLON value {
-setCurOper(0);
-float val;
-if (vtype == FLOAT_TYPE){
-memcpy(&val, &$3, sizeof(uint64_t));
-setCurVal($1, 0, val);
-}else {
-setCurVal($1, $3, 0);
-}
-
+    setCurOper(0);
+    float val;
+    if (vtype == FLOAT_TYPE){
+        memcpy(&val, &$3, sizeof(uint64_t));
+        setCurVal($1, 0, val);
+    }else {
+        setCurVal($1, $3, 0);
+    }
 }
 |
 STRING COLON operation {setCurVal($1, $3, 0);}
@@ -84,14 +87,14 @@ operation: OP_C_BRACE DOLLAR comp COLON value CL_C_BRACE {setCurOper($3); $$ = $
 
 set_vals : set_val | set_val COMMA set_vals
 
-        set_val : STRING COLON value {
-if (vtype == FLOAT_TYPE){
-float val;
-memcpy(&val, &$3, sizeof(uint64_t));
-addValSetting($1, 0, val);
-}else
-addValSetting($1, $3, 0);
-
+set_val : STRING COLON value {
+    if (vtype == FLOAT_TYPE){
+        float val;
+        memcpy(&val, &$3, sizeof(uint64_t));
+        addValSetting($1, 0, val);
+    }else {
+        addValSetting($1, $3, 0);
+    }
 };
 
 value : QUOTE STRING QUOTE {vtype = STRING_TYPE; $$ = $2;}
@@ -194,7 +197,8 @@ void setCommand(uint8_t command){
 }
 
 void printQuery(){
-    printf("Command: %s (%x)\n", commandsStr[query.command], query.command);
+    uint8_t qCom = query.command;
+    printf("Command: %s (%x)\n", commandsStr[qCom], qCom);
     filtersCount = 0;
     size_t compCount = 0;
     printf("-> Filters:\n");
@@ -202,12 +206,13 @@ void printQuery(){
         if (query.filtersList->compList)
             printf("--> Filter %zu:\n", filtersCount++);
         while (query.filtersList->compList){
-            char* field = query.filtersList->compList->kv.key;
+            char* key = query.filtersList->compList->kv.key;
             uint64_t value = query.filtersList->compList->kv.valueInt;
             float fvalue = query.filtersList->compList->kv.valueReal;
 
             printf("---> Comparator %zu:\n", compCount++);
-            printf("---> Field '%s'\n---> Operation '%d'\n", field, query.filtersList->compList->operation);
+            uint8_t opCode = query.filtersList->compList->operation;
+            printf("---> Key '%s'\n---> Operation %s (%d)\n", key, operationStr[opCode], opCode);
 
             switch(query.filtersList->compList->kv.valueType){
                 case STRING_TYPE: printf("---> Value '%s'\n", value); break;
@@ -223,7 +228,7 @@ void printQuery(){
     if (query.settingsList)
         printf("-> Settings: \n");
     while (query.settingsList){
-        printf("--> Field '%s'\n", query.settingsList->kv.key);
+        printf("--> Key '%s'\n", query.settingsList->kv.key);
         switch(query.settingsList->kv.valueType){
             case STRING_TYPE: printf("--> Value '%s'\n", query.settingsList->kv.valueInt); break;
             case INT_TYPE: printf("--> Value '%lu'\n", query.settingsList->kv.valueInt); break;
